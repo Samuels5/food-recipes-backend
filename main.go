@@ -7,7 +7,9 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -28,6 +30,15 @@ type LoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
+
+// JWT Claims struct
+type Claims struct {
+	UserID string `json:"userId"`
+	jwt.RegisteredClaims
+}
+
+// Use a secure key in a real application
+var jwtKey = []byte("my_secret_key")
 
 // HasuraUserResponse helps in parsing the user data from Hasura
 type HasuraUserResponse struct {
@@ -204,9 +215,11 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Set headers
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("x-hasura-admin-secret", "myadminsecretkey")
 
+	// Send the request
 	client := &http.Client{}
 	resp, err := client.Do(httpReq)
 	if err != nil {
@@ -215,6 +228,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
+	// Check the response
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("Error from Hasura: %s", string(body))
@@ -225,22 +239,45 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	var hasuraResp HasuraUserResponse
 	err = json.Unmarshal(body, &hasuraResp)
 	if err != nil {
-		log.Printf("Error decoding Hasura response: %s", err)
-		http.Error(w, "Error processing database response", http.StatusInternalServerError)
+		http.Error(w, "Error parsing Hasura response", http.StatusInternalServerError)
 		return
 	}
 
 	if len(hasuraResp.Data.Users) == 0 {
-		log.Println("User not found")
-		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
 		return
 	}
 
-	foundUser := hasuraResp.Data.Users[0]
-	log.Printf("Found user: %+v", foundUser)
+	user := hasuraResp.Data.Users[0]
 
-	// (Next Step) Compare password and generate JWT
+	// 3. Compare the hashed password with the provided password
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(loginReq.Password))
+	if err != nil {
+		// Passwords don't match
+		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
+		return
+	}
 
+	// 4. Generate a JWT token
+	expirationTime := time.Now().Add(24 * time.Hour)
+	claims := &Claims{
+		UserID: user.ID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString(jwtKey)
+	if err != nil {
+		http.Error(w, "Error generating token", http.StatusInternalServerError)
+		return
+	}
+
+	// 5. Return the token
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "Login endpoint hit successfully! User found.")
+	json.NewEncoder(w).Encode(map[string]string{
+		"token": tokenString,
+	})
 }
