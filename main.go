@@ -31,9 +31,16 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
-// JWT Claims struct
+// HasuraClaims defines the custom claims for Hasura JWT
+type HasuraClaims struct {
+	AllowedRoles []string `json:"x-hasura-allowed-roles"`
+	DefaultRole  string   `json:"x-hasura-default-role"`
+	UserID       string   `json:"x-hasura-user-id"`
+}
+
+// Claims struct embeds the Hasura claims and standard JWT claims
 type Claims struct {
-	UserID string `json:"userId"`
+	HasuraClaims `json:"https://hasura.io/jwt/claims"`
 	jwt.RegisteredClaims
 }
 
@@ -258,11 +265,16 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 4. Generate a JWT token
+	// 4. Generate a JWT token with Hasura claims
 	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &Claims{
-		UserID: user.ID,
+		HasuraClaims: HasuraClaims{
+			AllowedRoles: []string{"user"},
+			DefaultRole:  "user",
+			UserID:       user.ID,
+		},
 		RegisteredClaims: jwt.RegisteredClaims{
+			// In real-world applications, use a shorter expiration time
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 		},
 	}
