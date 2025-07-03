@@ -17,6 +17,6 @@ services:
       HASURA_GRAPHQL_DATABASE_URL: postgres://postgres:postgrespassword@postgres:5432/postgres
       HASURA_GRAPHQL_ENABLE_CONSOLE: "true"
       HASURA_GRAPHQL_ADMIN_SECRET: myadminsecretkey
-      # HASURA_GRAPHQL_JWT_SECRET: '{"type":"HS256","key":"my_secret_key"}'
+      HASURA_GRAPHQL_JWT_SECRET: '{"type":"HS256","key":"my_super_secret_jwt_key_that_is_at_least_32_characters_long"}'
 volumes:
   db_data:

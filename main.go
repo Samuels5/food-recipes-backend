@@ -44,8 +44,8 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-// Use a secure key in a real application
-var jwtKey = []byte("my_secret_key")
+// Use a secure key in a real application (minimum 32 characters for Hasura)
+var jwtKey = []byte("my_super_secret_jwt_key_that_is_at_least_32_characters_long")
 
 // HasuraUserResponse helps in parsing the user data from Hasura
 type HasuraUserResponse struct {
